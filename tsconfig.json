@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../reshell/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../reshell/**/*.ts", "../reshell/**/*.tsx"],
+  "exclude": ["node_modules", ".output"]
+}
