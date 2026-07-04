@@ -21,7 +21,7 @@ export default defineBackground(() => {
 
   async function openOrFocusReshell() {
     const url = await getReshellUrl();
-    const [existing] = await chrome.tabs.query({ url });
+    const [existing] = await chrome.tabs.query({ url: `${url}*` });
     if (existing?.id != null) {
       await chrome.tabs.update(existing.id, { active: true });
       await chrome.windows.update(existing.windowId, { focused: true });
