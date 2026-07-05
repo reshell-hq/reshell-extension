@@ -116,7 +116,19 @@ function createBrowserProvider() {
   };
 }
 
-getReshellUrl().then((url) => {
+async function init() {
+  const url = await getReshellUrl();
+
+  const storage = await chrome.storage.local.get(CONFIG_OVERRIDE_KEY);
+  const raw = storage[CONFIG_OVERRIDE_KEY];
+  if (raw && typeof raw === "string") {
+    try {
+      (window as unknown as Record<string, unknown>).__RESHELL_CONFIG__ = JSON.parse(raw);
+    } catch {
+      /* Invalid JSON — ignore */
+    }
+  }
+
   const frame = document.getElementById("reshell-frame") as HTMLIFrameElement;
 
   frame.addEventListener("load", () => {
@@ -128,24 +140,6 @@ getReshellUrl().then((url) => {
     } catch {
       /* cross-origin may block */
     }
-
-    chrome.storage.local.get(CONFIG_OVERRIDE_KEY).then((result) => {
-      const raw = result[CONFIG_OVERRIDE_KEY];
-      if (raw && typeof raw === "string") {
-        try {
-          const config = JSON.parse(raw);
-          try {
-            if (frame.contentWindow) {
-              (frame.contentWindow as Record<string, unknown>).__RESHELL_CONFIG__ = config;
-            }
-          } catch {
-            /* cross-origin may block */
-          }
-        } catch {
-          /* Invalid JSON — ignore and fall back to baked-in config */
-        }
-      }
-    });
 
     const attemptFocus = () => {
       try {
@@ -164,7 +158,9 @@ getReshellUrl().then((url) => {
   });
 
   frame.src = url;
-});
+}
+
+init();
 
 document.addEventListener("DOMContentLoaded", () => {
   document.body.focus();
