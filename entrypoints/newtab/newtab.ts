@@ -121,15 +121,26 @@ async function init() {
 
   const storage = await chrome.storage.local.get(CONFIG_OVERRIDE_KEY);
   const raw = storage[CONFIG_OVERRIDE_KEY];
+  let configOverride: unknown = null;
   if (raw && typeof raw === "string") {
     try {
-      (window as unknown as Record<string, unknown>).__RESHELL_CONFIG__ = JSON.parse(raw);
+      configOverride = JSON.parse(raw);
     } catch {
       /* Invalid JSON — ignore */
     }
   }
 
   const frame = document.getElementById("reshell-frame") as HTMLIFrameElement;
+
+  // postMessage works regardless of same/cross-origin and doesn't race the
+  // iframe's load — the child asks for config on its own mount, we answer
+  // whenever that request arrives (ADR-0011 follow-up).
+  window.addEventListener("message", (event) => {
+    const data = event.data as { type?: string } | null;
+    if (data && data.type === "RESHELL_REQUEST_CONFIG" && frame.contentWindow) {
+      frame.contentWindow.postMessage({ type: "RESHELL_CONFIG", config: configOverride }, "*");
+    }
+  });
 
   frame.addEventListener("load", () => {
     try {
