@@ -1,12 +1,12 @@
 import { defineBackground } from "wxt/utils/define-background";
 
 const STORAGE_KEY = "reshell.config";
-const DEFAULT_URL = "http://localhost:3000";
+const DEFAULT_URL = chrome.runtime.getURL("/reshell/index.html");
 
 export default defineBackground(() => {
   async function getReshellUrl(): Promise<string> {
     const result = await chrome.storage.local.get(STORAGE_KEY);
-    return result[STORAGE_KEY] ?? DEFAULT_URL;
+    return result[STORAGE_KEY] || DEFAULT_URL;
   }
 
   chrome.commands.onCommand.addListener((command) => {
@@ -21,7 +21,7 @@ export default defineBackground(() => {
 
   async function openOrFocusReshell() {
     const url = await getReshellUrl();
-    const pattern = url.replace(/\/+$/, "") + "/*";
+    const pattern = url.replace(/\/index\.html$/, "/*");
     const [existing] = await chrome.tabs.query({ url: pattern });
     if (existing?.id != null) {
       await chrome.tabs.update(existing.id, { active: true });

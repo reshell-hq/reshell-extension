@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
+    "bundle-reshell": "node scripts/bundle-reshell.mjs",
+    "build": "node scripts/bundle-reshell.mjs && wxt build",
+    "build:extension-only": "wxt build",
+    "build:firefox": "node scripts/bundle-reshell.mjs && wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox"
   },

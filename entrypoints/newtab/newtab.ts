@@ -1,7 +1,7 @@
 const STORAGE_KEY = "reshell.config";
 const SESSIONS_KEY = "reshell.sessions.v1";
 const CONFIG_OVERRIDE_KEY = "reshell.configOverride";
-const DEFAULT_URL = "http://localhost:3000";
+const DEFAULT_URL = chrome.runtime.getURL("/reshell/index.html");
 
 interface SessionTab {
   url: string;
@@ -18,7 +18,7 @@ interface Session {
 
 async function getReshellUrl(): Promise<string> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] ?? DEFAULT_URL;
+  return result[STORAGE_KEY] || DEFAULT_URL;
 }
 
 function createBrowserProvider() {

@@ -2,7 +2,7 @@ const STORAGE_KEY = "reshell.config";
 const SESSIONS_KEY = "reshell.sessions.v1";
 const CONFIG_OVERRIDE_KEY = "reshell.configOverride";
 const CONFIG_SOURCE_KEY = "reshell.configSource";
-const DEFAULT_URL = "http://localhost:3000";
+const DEFAULT_URL = "";
 
 type ConfigSource = "none" | "paste" | "upload" | "fetch";
 
@@ -34,7 +34,11 @@ function formatDate(ts: number): string {
 
 async function getReshellUrl(): Promise<string> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] ?? DEFAULT_URL;
+  return result[STORAGE_KEY] || "";
+}
+
+function isReshellTab(url: string | undefined): boolean {
+  return !!url && (url.startsWith("chrome-extension://") || url.startsWith("chrome://newtab"));
 }
 
 async function getSessions(): Promise<Session[]> {
@@ -48,8 +52,7 @@ async function saveSessions(sessions: Session[]): Promise<void> {
 
 async function loadTabs() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
-  const reshellUrl = await getReshellUrl();
-  const otherTabs = tabs.filter((t) => t.id != null && t.url != null && !t.url.startsWith(reshellUrl));
+  const otherTabs = tabs.filter((t) => t.id != null && t.url != null && !isReshellTab(t.url));
 
   const list = document.getElementById("tabs-list")!;
   if (otherTabs.length === 0) {
@@ -135,8 +138,7 @@ async function collapseSelected() {
 
 async function collapseAll() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
-  const reshellUrl = await getReshellUrl();
-  const otherTabs = tabs.filter((t) => t.id != null && t.url != null && !t.url.startsWith(reshellUrl));
+  const otherTabs = tabs.filter((t) => t.id != null && t.url != null && !isReshellTab(t.url));
   if (otherTabs.length === 0) return;
 
   const sessionTabs: SessionTab[] = otherTabs.map((t) => ({
@@ -176,13 +178,19 @@ async function deleteSession(sessionId: string) {
 
 async function loadSettings() {
   const url = await getReshellUrl();
-  (document.getElementById("reshell-url") as HTMLInputElement).value = url;
+  const input = document.getElementById("reshell-url") as HTMLInputElement;
+  if (url) {
+    input.value = url;
+    input.placeholder = "Leave empty for bundled Reshell";
+  } else {
+    input.value = "";
+    input.placeholder = "Using bundled Reshell";
+  }
 }
 
 async function saveSettings() {
   const url = (document.getElementById("reshell-url") as HTMLInputElement).value.trim();
-  if (!url) return;
-  await chrome.storage.local.set({ [STORAGE_KEY]: url });
+  await chrome.storage.local.set({ [STORAGE_KEY]: url || "" });
   window.close();
 }
 
