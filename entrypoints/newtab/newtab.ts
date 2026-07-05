@@ -1,5 +1,6 @@
 const STORAGE_KEY = "reshell.config";
 const SESSIONS_KEY = "reshell.sessions.v1";
+const CONFIG_OVERRIDE_KEY = "reshell.configOverride";
 const DEFAULT_URL = "http://localhost:3000";
 
 interface SessionTab {
@@ -127,6 +128,24 @@ getReshellUrl().then((url) => {
     } catch {
       /* cross-origin may block */
     }
+
+    chrome.storage.local.get(CONFIG_OVERRIDE_KEY).then((result) => {
+      const raw = result[CONFIG_OVERRIDE_KEY];
+      if (raw && typeof raw === "string") {
+        try {
+          const config = JSON.parse(raw);
+          try {
+            if (frame.contentWindow) {
+              (frame.contentWindow as Record<string, unknown>).__RESHELL_CONFIG__ = config;
+            }
+          } catch {
+            /* cross-origin may block */
+          }
+        } catch {
+          /* Invalid JSON — ignore and fall back to baked-in config */
+        }
+      }
+    });
 
     const attemptFocus = () => {
       try {

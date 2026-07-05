@@ -146,6 +146,80 @@
         font-size: 13px;
       }
       .empty { text-align: center; padding: 24px; color: var(--muted); }
+      .config-source-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      .config-source-tabs button {
+        flex: 1;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .config-source-tabs button.active {
+        background: var(--primary);
+        color: var(--primary-fg);
+        border-color: var(--primary);
+      }
+      .config-area {
+        margin-bottom: 8px;
+      }
+      .config-area textarea {
+        width: 100%;
+        height: 120px;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: monospace;
+        font-size: 11px;
+        resize: vertical;
+      }
+      .config-area input[type="url"],
+      .config-area input[type="file"] {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        font-size: 12px;
+      }
+      .config-area .fetch-row {
+        display: flex;
+        gap: 6px;
+      }
+      .config-area .fetch-row input { flex: 1; }
+      .config-area .fetch-row button {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        cursor: pointer;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .config-status {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+      }
+      .config-status.ok { background: #d4edda; color: #155724; }
+      .config-status.error { background: #f8d7da; color: #721c24; }
+      .config-status.loading { background: #fff3cd; color: #856404; }
+      @media (prefers-color-scheme: dark) {
+        .config-status.ok { background: #1a3a22; color: #86e0a0; }
+        .config-status.error { background: #3a1a1a; color: #e08686; }
+        .config-status.loading { background: #3a3a1a; color: #e0e086; }
+      }
     </style>
   </head>
   <body>
@@ -172,6 +246,28 @@
       <div class="settings-row">
         <label for="reshell-url">Reshell URL</label>
         <input type="text" id="reshell-url" placeholder="http://localhost:3000" />
+      </div>
+      <div class="settings-row">
+        <label>Config Override</label>
+        <div class="config-source-tabs">
+          <button data-config-tab="none" class="active">None</button>
+          <button data-config-tab="paste">Paste</button>
+          <button data-config-tab="upload">Upload</button>
+          <button data-config-tab="fetch">Fetch URL</button>
+        </div>
+        <div class="config-area" id="config-paste" style="display:none">
+          <textarea id="config-textarea" placeholder='Paste your reshell.config.json here...'></textarea>
+        </div>
+        <div class="config-area" id="config-upload" style="display:none">
+          <input type="file" id="config-file" accept=".json" />
+        </div>
+        <div class="config-area" id="config-fetch" style="display:none">
+          <div class="fetch-row">
+            <input type="url" id="config-url" placeholder="https://raw.githubusercontent.com/..." />
+            <button id="btn-fetch-config">Fetch</button>
+          </div>
+        </div>
+        <div id="config-status" class="config-status" style="display:none"></div>
       </div>
       <div class="actions">
         <button class="btn-primary" id="btn-save-url">Save</button>

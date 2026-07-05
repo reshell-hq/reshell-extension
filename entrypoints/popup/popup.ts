@@ -1,6 +1,12 @@
 const STORAGE_KEY = "reshell.config";
 const SESSIONS_KEY = "reshell.sessions.v1";
+const CONFIG_OVERRIDE_KEY = "reshell.configOverride";
+const CONFIG_SOURCE_KEY = "reshell.configSource";
 const DEFAULT_URL = "http://localhost:3000";
+
+type ConfigSource = "none" | "paste" | "upload" | "fetch";
+
+let currentConfigSource: ConfigSource = "none";
 
 interface SessionTab {
   url: string;
@@ -180,6 +186,139 @@ async function saveSettings() {
   window.close();
 }
 
+async function getConfigSource(): Promise<ConfigSource> {
+  const result = await chrome.storage.local.get(CONFIG_SOURCE_KEY);
+  return result[CONFIG_SOURCE_KEY] ?? "none";
+}
+
+async function getConfigOverride(): Promise<string | null> {
+  const result = await chrome.storage.local.get(CONFIG_OVERRIDE_KEY);
+  return result[CONFIG_OVERRIDE_KEY] ?? null;
+}
+
+async function saveConfigOverride(json: string): Promise<void> {
+  await chrome.storage.local.set({ [CONFIG_OVERRIDE_KEY]: json });
+}
+
+async function clearConfigOverride(): Promise<void> {
+  await chrome.storage.local.remove(CONFIG_OVERRIDE_KEY);
+}
+
+async function setConfigSource(source: ConfigSource): Promise<void> {
+  await chrome.storage.local.set({ [CONFIG_SOURCE_KEY]: source });
+}
+
+function showConfigStatus(message: string, type: "ok" | "error" | "loading") {
+  const el = document.getElementById("config-status")!;
+  el.textContent = message;
+  el.className = `config-status ${type}`;
+  el.style.display = "block";
+}
+
+function hideConfigStatus() {
+  const el = document.getElementById("config-status")!;
+  el.style.display = "none";
+}
+
+function switchConfigTab(source: ConfigSource) {
+  currentConfigSource = source;
+  document.querySelectorAll("[data-config-tab]").forEach((b) => {
+    b.classList.toggle("active", b.getAttribute("data-config-tab") === source);
+  });
+  document.getElementById("config-paste")!.style.display = source === "paste" ? "block" : "none";
+  document.getElementById("config-upload")!.style.display = source === "upload" ? "block" : "none";
+  document.getElementById("config-fetch")!.style.display = source === "fetch" ? "block" : "none";
+  hideConfigStatus();
+}
+
+async function savePastedConfig() {
+  const textarea = document.getElementById("config-textarea") as HTMLTextAreaElement;
+  const raw = textarea.value.trim();
+  if (!raw) {
+    await clearConfigOverride();
+    await setConfigSource("none");
+    switchConfigTab("none");
+    return;
+  }
+  try {
+    JSON.parse(raw);
+    await saveConfigOverride(raw);
+    await setConfigSource("paste");
+    showConfigStatus("Config saved", "ok");
+  } catch {
+    showConfigStatus("Invalid JSON", "error");
+  }
+}
+
+let pasteDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onPasteInput() {
+  if (pasteDebounceTimer) clearTimeout(pasteDebounceTimer);
+  pasteDebounceTimer = setTimeout(savePastedConfig, 500);
+}
+
+async function handleFileUpload() {
+  const input = document.getElementById("config-file") as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    JSON.parse(text);
+    await saveConfigOverride(text);
+    await setConfigSource("upload");
+    showConfigStatus(`Loaded: ${file.name}`, "ok");
+  } catch {
+    showConfigStatus("Invalid JSON file", "error");
+  }
+}
+
+async function handleFetchConfig() {
+  const urlInput = document.getElementById("config-url") as HTMLInputElement;
+  const url = urlInput.value.trim();
+  if (!url) return;
+
+  showConfigStatus("Fetching...", "loading");
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      showConfigStatus(`Fetch failed: ${res.status} ${res.statusText}`, "error");
+      return;
+    }
+    const text = await res.text();
+    JSON.parse(text);
+    await saveConfigOverride(text);
+    await setConfigSource("fetch");
+    showConfigStatus("Config fetched & saved", "ok");
+  } catch (err) {
+    showConfigStatus(`Fetch failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+  }
+}
+
+async function loadConfigSettings() {
+  const source = await getConfigSource();
+  switchConfigTab(source);
+
+  if (source === "paste") {
+    const json = await getConfigOverride();
+    if (json) {
+      (document.getElementById("config-textarea") as HTMLTextAreaElement).value = json;
+    }
+  }
+  if (source === "fetch") {
+    const json = await getConfigOverride();
+    if (json) {
+      showConfigStatus("Config loaded", "ok");
+    }
+  }
+  if (source === "upload") {
+    const json = await getConfigOverride();
+    if (json) {
+      showConfigStatus("Config loaded", "ok");
+    }
+  }
+}
+
 function switchTab(tab: string) {
   currentTab = tab;
   document.querySelectorAll("nav button").forEach((b) => {
@@ -190,7 +329,7 @@ function switchTab(tab: string) {
   });
   if (tab === "tabs") loadTabs();
   if (tab === "sessions") loadSessions();
-  if (tab === "settings") loadSettings();
+  if (tab === "settings") { loadSettings(); loadConfigSettings(); }
 }
 
 function escapeHtml(str: string): string {
@@ -219,5 +358,15 @@ document.getElementById("sessions-list")!.addEventListener("click", (e) => {
 });
 
 document.getElementById("btn-save-url")!.addEventListener("click", saveSettings);
+
+document.querySelectorAll("[data-config-tab]").forEach((btn) => {
+  btn.addEventListener("click", () => switchConfigTab(btn.getAttribute("data-config-tab") as ConfigSource));
+});
+
+document.getElementById("config-textarea")!.addEventListener("input", onPasteInput);
+
+document.getElementById("config-file")!.addEventListener("change", handleFileUpload);
+
+document.getElementById("btn-fetch-config")!.addEventListener("click", handleFetchConfig);
 
 switchTab("tabs");
