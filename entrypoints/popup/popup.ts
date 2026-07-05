@@ -34,7 +34,19 @@ function formatDate(ts: number): string {
 
 async function getReshellUrl(): Promise<string> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || "";
+  const url = result[STORAGE_KEY];
+  return typeof url === "string" && url && !isConfigUrl(url) ? url : "";
+}
+
+function isConfigUrl(url: string): boolean {
+  return /\.json(?:[?#]|$)/.test(url) || /github\.com|raw\.githubusercontent\.com|gist\.githubusercontent\.com/.test(url);
+}
+
+function normalizeConfigUrl(url: string): string {
+  const match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+  if (!match) return url;
+  const [, owner, repo, branch, path] = match;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
 }
 
 function isReshellTab(url: string | undefined): boolean {
@@ -190,6 +202,12 @@ async function loadSettings() {
 
 async function saveSettings() {
   const url = (document.getElementById("reshell-url") as HTMLInputElement).value.trim();
+  if (url && isConfigUrl(url)) {
+    await chrome.storage.local.set({ [STORAGE_KEY]: "" });
+    (document.getElementById("reshell-url") as HTMLInputElement).value = "";
+    await saveFetchedConfig(url);
+    return;
+  }
   await chrome.storage.local.set({ [STORAGE_KEY]: url || "" });
   await flushPendingConfig();
   window.close();
@@ -298,9 +316,13 @@ async function handleFetchConfig() {
   const url = urlInput.value.trim();
   if (!url) return;
 
+  await saveFetchedConfig(url);
+}
+
+async function saveFetchedConfig(url: string) {
   showConfigStatus("Fetching...", "loading");
   try {
-    const res = await fetch(url);
+    const res = await fetch(normalizeConfigUrl(url));
     if (!res.ok) {
       showConfigStatus(`Fetch failed: ${res.status} ${res.statusText}`, "error");
       return;

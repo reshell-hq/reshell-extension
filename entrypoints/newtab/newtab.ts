@@ -18,7 +18,21 @@ interface Session {
 
 async function getReshellUrl(): Promise<string> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || DEFAULT_URL;
+  const url = result[STORAGE_KEY];
+  return typeof url === "string" && url && !isConfigUrl(url) ? url : DEFAULT_URL;
+}
+
+function isConfigUrl(url: string): boolean {
+  return /\.json(?:[?#]|$)/.test(url) || /github\.com|raw\.githubusercontent\.com|gist\.githubusercontent\.com/.test(url);
+}
+
+function parseConfig(raw: unknown): unknown {
+  if (typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 function createBrowserProvider() {
@@ -120,25 +134,30 @@ async function init() {
   const url = await getReshellUrl();
 
   const storage = await chrome.storage.local.get(CONFIG_OVERRIDE_KEY);
-  const raw = storage[CONFIG_OVERRIDE_KEY];
-  let configOverride: unknown = null;
-  if (raw && typeof raw === "string") {
-    try {
-      configOverride = JSON.parse(raw);
-    } catch {
-      /* Invalid JSON — ignore */
-    }
-  }
+  let configOverride = parseConfig(storage[CONFIG_OVERRIDE_KEY]);
 
   const frame = document.getElementById("reshell-frame") as HTMLIFrameElement;
+
+  function postConfig() {
+    if (frame.contentWindow) {
+      frame.contentWindow.postMessage({ type: "RESHELL_CONFIG", config: configOverride }, "*");
+    }
+  }
 
   // postMessage works regardless of same/cross-origin and doesn't race the
   // iframe's load — the child asks for config on its own mount, we answer
   // whenever that request arrives (ADR-0011 follow-up).
   window.addEventListener("message", (event) => {
     const data = event.data as { type?: string } | null;
-    if (data && data.type === "RESHELL_REQUEST_CONFIG" && frame.contentWindow) {
-      frame.contentWindow.postMessage({ type: "RESHELL_CONFIG", config: configOverride }, "*");
+    if (data && data.type === "RESHELL_REQUEST_CONFIG") {
+      postConfig();
+    }
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[CONFIG_OVERRIDE_KEY]) {
+      configOverride = parseConfig(changes[CONFIG_OVERRIDE_KEY].newValue);
+      postConfig();
     }
   });
 
