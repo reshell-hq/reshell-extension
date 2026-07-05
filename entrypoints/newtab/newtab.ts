@@ -1,6 +1,7 @@
 const STORAGE_KEY = "reshell.config";
 const SESSIONS_KEY = "reshell.sessions.v1";
 const CONFIG_OVERRIDE_KEY = "reshell.configOverride";
+const CONFIG_SOURCE_KEY = "reshell.configSource";
 const DEFAULT_URL = chrome.runtime.getURL("/reshell/index.html");
 
 interface SessionTab {
@@ -16,8 +17,34 @@ interface Session {
   createdAt: number;
 }
 
+function storageGet(keys: string | string[]): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, (result) => {
+      const message = chrome.runtime.lastError?.message;
+      if (message) {
+        reject(new Error(message));
+      } else {
+        resolve(result);
+      }
+    });
+  });
+}
+
+function storageSet(items: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(items, () => {
+      const message = chrome.runtime.lastError?.message;
+      if (message) {
+        reject(new Error(message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 async function getReshellUrl(): Promise<string> {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
+  const result = await storageGet(STORAGE_KEY);
   const url = result[STORAGE_KEY];
   return typeof url === "string" && url && !isConfigUrl(url) ? url : DEFAULT_URL;
 }
@@ -133,7 +160,7 @@ function createBrowserProvider() {
 async function init() {
   const url = await getReshellUrl();
 
-  const storage = await chrome.storage.local.get(CONFIG_OVERRIDE_KEY);
+  const storage = await storageGet(CONFIG_OVERRIDE_KEY);
   let configOverride = parseConfig(storage[CONFIG_OVERRIDE_KEY]);
 
   const frame = document.getElementById("reshell-frame") as HTMLIFrameElement;
@@ -147,10 +174,26 @@ async function init() {
   // postMessage works regardless of same/cross-origin and doesn't race the
   // iframe's load — the child asks for config on its own mount, we answer
   // whenever that request arrives (ADR-0011 follow-up).
-  window.addEventListener("message", (event) => {
-    const data = event.data as { type?: string } | null;
+  window.addEventListener("message", async (event) => {
+    const data = event.data as { type?: string; config?: unknown; source?: "paste" | "fetch"; requestId?: string } | null;
     if (data && data.type === "RESHELL_REQUEST_CONFIG") {
       postConfig();
+    } else if (data && data.type === "RESHELL_APPLY_CONFIG") {
+      try {
+        configOverride = data.config ?? null;
+        await storageSet({
+          [CONFIG_OVERRIDE_KEY]: JSON.stringify(configOverride),
+          [CONFIG_SOURCE_KEY]: data.source ?? "paste",
+        });
+        postApplyConfigResult(event.source, data.requestId, true);
+      } catch (error) {
+        postApplyConfigResult(
+          event.source,
+          data.requestId,
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     }
   });
 
@@ -188,6 +231,16 @@ async function init() {
   });
 
   frame.src = url;
+}
+
+function postApplyConfigResult(
+  source: MessageEventSource | null,
+  requestId: string | undefined,
+  ok: boolean,
+  error?: string,
+) {
+  if (!source || !requestId) return;
+  source.postMessage({ type: "RESHELL_APPLY_CONFIG_RESULT", requestId, ok, error }, { targetOrigin: "*" });
 }
 
 init();

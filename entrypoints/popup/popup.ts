@@ -43,10 +43,15 @@ function isConfigUrl(url: string): boolean {
 }
 
 function normalizeConfigUrl(url: string): string {
-  const match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
-  if (!match) return url;
-  const [, owner, repo, branch, path] = match;
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+  const blob = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+  if (blob) {
+    const [, owner, repo, branch, path] = blob;
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+  }
+  const repoRoot = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)\/?$/);
+  if (!repoRoot) return url;
+  const [, owner, repo] = repoRoot;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/main/reshell.config.json`;
 }
 
 function isReshellTab(url: string | undefined): boolean {
