@@ -191,6 +191,7 @@ async function loadSettings() {
 async function saveSettings() {
   const url = (document.getElementById("reshell-url") as HTMLInputElement).value.trim();
   await chrome.storage.local.set({ [STORAGE_KEY]: url || "" });
+  await flushPendingConfig();
   window.close();
 }
 
@@ -263,6 +264,17 @@ let pasteDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 function onPasteInput() {
   if (pasteDebounceTimer) clearTimeout(pasteDebounceTimer);
   pasteDebounceTimer = setTimeout(savePastedConfig, 500);
+}
+
+/** Save button must not close the popup before a debounced paste save lands. */
+async function flushPendingConfig(): Promise<void> {
+  if (pasteDebounceTimer) {
+    clearTimeout(pasteDebounceTimer);
+    pasteDebounceTimer = null;
+    if (currentConfigSource === "paste") {
+      await savePastedConfig();
+    }
+  }
 }
 
 async function handleFileUpload() {
@@ -376,5 +388,13 @@ document.getElementById("config-textarea")!.addEventListener("input", onPasteInp
 document.getElementById("config-file")!.addEventListener("change", handleFileUpload);
 
 document.getElementById("btn-fetch-config")!.addEventListener("click", handleFetchConfig);
+
+// Extension popups can lose focus and close at any time (click outside,
+// Escape, etc.) — not just via the Save button. Flush any pending debounced
+// paste-save before the JS context dies, or the config is silently lost.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushPendingConfig();
+});
+window.addEventListener("pagehide", () => flushPendingConfig());
 
 switchTab("tabs");
